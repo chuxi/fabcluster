@@ -35,7 +35,7 @@ env.roledefs = {
     'hadoop_slaves': clusters,
     'zookeeper': clusters[1:],
     'hbase': clusters,
-    'hbase_master': clusters[1:2],
+    'hbase_master': clusters[:1],
     'hbase_slaves': clusters,
     'kafka': clusters[2:],
     'spark': clusters,
@@ -46,7 +46,7 @@ env.roledefs = {
 
 
 baseDir = '/home/hadoop'
-optDir = '/opt'
+optDir = '/opt/vlis'
 tmpDir = '/tmp'
 
 newgroup = 'hadoop'
@@ -166,7 +166,7 @@ def setNTP():
     myver = result.split(' ')[1]
     with settings(warn_only=True):
         if myos == 'centos':
-            sudo('yum install -y ntp')
+            sudo('yum -y install ntp')
             if myver.startswith('7'):
                 sudo('systemctl start ntpd.service')
                 sudo('systemctl enable ntpd.service')
@@ -183,6 +183,12 @@ def setNTP():
 
     print green('install NTP service successfully!')
 
+def mkDirs():
+    '''
+        添加需要预先设置的目录
+    '''
+    with settings(warn_only=True):
+        sudo('[ ! -d %s ] && mkdir -p %s && chown -R %s:%s %s' % (optDir, optDir, newuser, newgroup, optDir))
 
 
 def puttar(fname):
@@ -208,15 +214,15 @@ def checkmd5(fname):
 def untarfile(key, fname):
     with cd("/tmp"):
         dirname = run("tar tf " + fname + " | head -n 1 | awk -F / '{{print $1}}'")
-        with cd("/opt"):
+        with cd(optDir):
             sudo("rm -rf " + dirname)
         with settings(warn_only=True):
-            sudo("tar -xzf " + fname + " -C /opt/")
+            sudo("tar -xzf %s -C %s" % (fname, optDir))
         with cd(optDir):
             sudo('chown -R %s:%s %s' % (newuser, newgroup, dirname))
     with cd("/usr/local"):
         sudo("rm -rf " + key)
-        sudo("ln -s /opt/" + dirname + " " + key)
+        sudo("ln -s %s/%s %s" % (optDir, dirname, key))
 
 
 def processTar(key, fname):
@@ -224,10 +230,12 @@ def processTar(key, fname):
     checkmd5(fname)
     untarfile(key, fname)
 
+
 @roles('cluster')
 def installJDK():
     processTar('jdk', env.fnames['jdk'])
     configProfile('JAVA_HOME', 'jdk')
+
 
 def configProfile(envname, key):
     sudo('sed -i \'s/.*%s.*//g\' /etc/profile' % envname)
@@ -335,6 +343,7 @@ def installHBase():
     configProfile('HBASE_HOME', k)
     configHBase()
 
+
 def configHBase():
     configDir = '/usr/local/hbase/conf'
 
@@ -364,6 +373,7 @@ def installKafka():
     configProfile('KAFKA_HOME', k)
     configKafka()
 
+
 def configKafka():
     configDir = '/usr/local/kafka/config'
 
@@ -379,6 +389,7 @@ def installSpark():
     processTar(k, env.fnames[k])
     configProfile('SPARK_HOME', k)
     configSpark()
+
 
 def configSpark():
     configDir = '/usr/local/spark/conf'
@@ -513,6 +524,7 @@ def preset():
     setSSHs()
     disableFirewall()
     setNTP()
+    mkDirs()
 
 
 def basedeploy():
@@ -606,3 +618,9 @@ def cleans(op=None):
         execute(cleanZookeeper)
     else:
         pass
+
+@task
+@roles('cluster')
+def reboots():
+    with settings(warn_only=True):
+        reboot()
