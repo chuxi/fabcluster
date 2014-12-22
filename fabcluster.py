@@ -272,7 +272,7 @@ def installHadoop():
     configProfile('HADOOP_HOME', 'hadoop')
     configHadoop()
 
-
+@roles('cluster')
 def configHadoop():
     configDir = '/usr/local/hadoop/etc/hadoop'
 
@@ -295,6 +295,16 @@ def configHadoop():
     setXMLPropVal(hdfssite, 'dfs.replication', '3')
     setXMLPropVal(hdfssite, 'dfs.permissions.enabled', 'false')
 
+    # yarn-site.xml
+    setXMLPropVal(yarnsite, 'yarn.resourcemanager.hostname', env.roledefs['hadoop_master'][0])
+    setXMLPropVal(yarnsite, 'yarn.nodemanager.aux-services', 'mapreduce_shuffle')
+
+    # mapred-site.xml
+    with settings(user = newuser, password = newpasswd, warn_only=True), cd(configDir):
+        run('[ ! -e mapred-site.xml ] && cp mapred-site.xml.template mapred-site.xml')
+    setXMLPropVal(mapredsite, 'mapreduce.framework.name', 'yarn')
+
+
     # slaves
     with cd(configDir):
         sudo('rm slaves')
@@ -311,7 +321,7 @@ def installZookeeper():
     configProfile('ZOOKEEPER_HOME', k)
     configZookeeper()
 
-
+@roles('zookeeper')
 def configZookeeper():
     configDir = '/usr/local/zookeeper/conf'
     dataDir = '/home/%s/zookeeper' % newuser
@@ -343,7 +353,7 @@ def installHBase():
     configProfile('HBASE_HOME', k)
     configHBase()
 
-
+@roles('hbase')
 def configHBase():
     configDir = '/usr/local/hbase/conf'
 
@@ -373,7 +383,7 @@ def installKafka():
     configProfile('KAFKA_HOME', k)
     configKafka()
 
-
+@roles('kafka')
 def configKafka():
     configDir = '/usr/local/kafka/config'
 
@@ -390,7 +400,7 @@ def installSpark():
     configProfile('SPARK_HOME', k)
     configSpark()
 
-
+@roles('spark')
 def configSpark():
     configDir = '/usr/local/spark/conf'
 
@@ -553,7 +563,21 @@ def deploy(op=None):
         pass
 
 
-def configuration():
+def configuration(op=None):
+    if op == None:
+        execute(configHadoop)
+        execute(configZookeeper)
+        execute(configHBase)
+        execute(configKafka)
+        execute(configSpark)
+    elif op == 'hadoop':
+        execute(configHadoop)
+    elif op == 'hbase':
+        execute(configHBase)
+    elif op == 'kafka':
+        execute(configKafka)
+    elif op == 'spark':
+        execute(configSpark)
     pass
 
 @task
@@ -567,7 +591,6 @@ def starts(op=None):
     elif op == 'hadoop':
         execute(startHadoop)
     elif op == 'hbase':
-        execute(startHadoop)
         execute(startZookeeper)
         execute(startHBase)
     elif op == 'kafka':
@@ -583,6 +606,10 @@ def installs(op=None):
     basedeploy()
     deploy(op)
     starts(op)
+
+@task
+def configs(op=None):
+    configuration(op)
 
 
 @task
@@ -621,6 +648,6 @@ def cleans(op=None):
 
 @task
 @roles('cluster')
-def reboots():
-    with settings(warn_only=True):
-        reboot()
+def status():
+    with settings(user = newuser, password = newpasswd):
+        run('jps')
