@@ -16,13 +16,13 @@ from fabric.contrib.console import confirm
 env.user = 'vlis'
 env.password = 'zjuvlis'
 # env.hostnames = {'10.214.208.11': 'node1',
-#                  '10.214.208.12': 'node2',
+# '10.214.208.12': 'node2',
 #                  '10.214.208.13': 'node3',
 #                  '10.214.208.14': 'node4',
 #                  }
 clusters = ['10.214.208.11', '10.214.208.12', '10.214.208.13', '10.214.208.14']
 
-env.hostnames = dict([h, 'node%d' % (i+1)] for i, h in enumerate(clusters))
+env.hostnames = dict([h, 'node%d' % (i + 1)] for i, h in enumerate(clusters))
 
 env.keywords = ['jdk', 'hadoop', 'zookeeper', 'hbase', 'kafka', 'spark']
 # 获取需要安装的tar包名称
@@ -33,7 +33,7 @@ env.roledefs = {
     'hadoop_master': clusters[:1],
     'hadoop_smaster': clusters[1:2],
     'hadoop_slaves': clusters,
-    'zookeeper': clusters[1:],
+    'zookeeper': clusters[:3],
     'hbase': clusters,
     'hbase_master': clusters[:1],
     'hbase_slaves': clusters,
@@ -42,8 +42,6 @@ env.roledefs = {
     'spark_master': clusters[2:3],
     'spark_slaves': clusters
 }
-
-
 
 baseDir = '/home/hadoop'
 optDir = '/opt/vlis'
@@ -76,8 +74,6 @@ def prelocal():
         local('ssh-keygen -t rsa -N "" -f id_rsa')
         local('cat id_rsa.pub > authorized_keys')
         local('echo "StrictHostKeyChecking no" > config')
-
-
 
 
 def setHosts():
@@ -139,6 +135,7 @@ def disableFirewall():
 
     print green("%s firewall is disabled successfully!" % env.host_string)
 
+
 # add a user and group - hadoop
 def addUser():
     print yellow('start to add user hadoop %s ...' % env.host_string)
@@ -183,6 +180,7 @@ def setNTP():
 
     print green('install NTP service successfully!')
 
+
 def mkDirs():
     '''
         添加需要预先设置的目录
@@ -202,14 +200,16 @@ def puttar(fname):
         else:
             print yellow('%s already exists! ' % fname)
 
+
 def checkmd5(fname):
     with settings(warn_only=True):
-        lmd5=local("md5sum ./tars/" + fname, capture=True).split(' ')[0]
-        rmd5=run("md5sum /tmp/" + fname).split(' ')[0]
+        lmd5 = local("md5sum ./tars/" + fname, capture=True).split(' ')[0]
+        rmd5 = run("md5sum /tmp/" + fname).split(' ')[0]
     if lmd5 == rmd5:
         print green("Successfully put " + fname + " !")
     else:
         print red("failed to put " + fname + " !")
+
 
 def untarfile(key, fname):
     with cd("/tmp"):
@@ -242,6 +242,7 @@ def configProfile(envname, key):
     sudo('sed -i \'$a export %s=/usr/local/%s\' /etc/profile' % (envname, key))
     sudo('sed -i \'$a export PATH=$%s/bin:$PATH\' /etc/profile' % envname)
 
+
 def setXMLPropVal(fname, prop, value):
     prop = '<name>' + prop + '</name>'
     value = '<value>%s</value>' % value
@@ -256,13 +257,10 @@ def setXMLPropVal(fname, prop, value):
         num = int(run('grep -n \'%s\' %s' % (prop, fname)).split(':')[0]) + 1
         sudo('sed -i \'%dc %s\' %s' % (num, value, fname))
 
+
 def setProperty(fname, prop, value):
     sudo('sed -i \'s/.*%s.*//g\' %s' % (prop, fname))
     sudo('sed -i \'$a %s\' %s' % (prop + value, fname))
-
-
-
-
 
 
 @roles('cluster')
@@ -271,6 +269,7 @@ def installHadoop():
     processTar(key, env.fnames[key])
     configProfile('HADOOP_HOME', 'hadoop')
     configHadoop()
+
 
 @roles('cluster')
 def configHadoop():
@@ -300,7 +299,7 @@ def configHadoop():
     setXMLPropVal(yarnsite, 'yarn.nodemanager.aux-services', 'mapreduce_shuffle')
 
     # mapred-site.xml
-    with settings(user = newuser, password = newpasswd, warn_only=True), cd(configDir):
+    with settings(user=newuser, password=newpasswd, warn_only=True), cd(configDir):
         run('[ ! -e mapred-site.xml ] && cp mapred-site.xml.template mapred-site.xml')
     setXMLPropVal(mapredsite, 'mapreduce.framework.name', 'yarn')
 
@@ -321,12 +320,13 @@ def installZookeeper():
     configProfile('ZOOKEEPER_HOME', k)
     configZookeeper()
 
+
 @roles('zookeeper')
 def configZookeeper():
     configDir = '/usr/local/zookeeper/conf'
     dataDir = '/home/%s/zookeeper' % newuser
 
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         with cd(configDir):
             sudo('cp zoo_sample.cfg zoo.cfg')
             setProperty('zoo.cfg', 'dataDir=', dataDir)
@@ -336,7 +336,7 @@ def configZookeeper():
                 setProperty('zoo.cfg', 'server.%d=' % count, '%s:2888:3888' % h)
 
         myhost = env.host_string
-        with settings(warn_only = True):
+        with settings(warn_only=True):
             rs = run('grep \'%s\' %s' % (myhost + ':2888:3888', configDir + '/zoo.cfg'))
         num = int(rs.split('=')[0].split('.')[1])
 
@@ -346,12 +346,14 @@ def configZookeeper():
             run('touch %s' % 'myid')
             run('echo %d > myid' % num)
 
+
 @roles('hbase')
 def installHBase():
     k = 'hbase'
     processTar(k, env.fnames[k])
     configProfile('HBASE_HOME', k)
     configHBase()
+
 
 @roles('hbase')
 def configHBase():
@@ -362,14 +364,16 @@ def configHBase():
     setProperty(configDir + '/hbase-env.sh', 'export HBASE_MANAGES_ZK=', 'false')
 
     # hbase-site.xml
-    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.rootdir', 'hdfs://%s:9000/hbase' % env.roledefs['hadoop_master'][0])
+    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.rootdir',
+                  'hdfs://%s:9000/hbase' % env.roledefs['hadoop_master'][0])
     setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.cluster.distributed', 'true')
-    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.zookeeper.quorum', '%s' % (','.join(x for x in env.roledefs['zookeeper'])))
+    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.zookeeper.quorum',
+                  '%s' % (','.join(x for x in env.roledefs['zookeeper'])))
     setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.zookeeper.property.dataDir', '/home/%s/zookeeper' % newuser)
 
     # regionservers
     with cd(configDir):
-        with settings(user = newuser, password = newpasswd):
+        with settings(user=newuser, password=newpasswd):
             run('rm -rf regionservers')
             run('touch regionservers')
             for k in env.roledefs['hbase_slaves']:
@@ -383,6 +387,7 @@ def installKafka():
     configProfile('KAFKA_HOME', k)
     configKafka()
 
+
 @roles('kafka')
 def configKafka():
     configDir = '/usr/local/kafka/config'
@@ -390,7 +395,8 @@ def configKafka():
     # server.properties
     setProperty(configDir + '/server.properties', 'broker.id=', env.hostnames[env.host_string][4:])
     setProperty(configDir + '/server.properties', 'log.dirs=', '/home/%s/kafka' % newuser)
-    setProperty(configDir + '/server.properties', 'zookeeper.connect=', (','.join(x + ':2181' for x in env.roledefs['zookeeper'])))
+    setProperty(configDir + '/server.properties', 'zookeeper.connect=',
+                (','.join(x + ':2181' for x in env.roledefs['zookeeper'])))
 
 
 @roles('spark')
@@ -400,13 +406,14 @@ def installSpark():
     configProfile('SPARK_HOME', k)
     configSpark()
 
+
 @roles('spark')
 def configSpark():
     configDir = '/usr/local/spark/conf'
 
     # slaves
     with cd(configDir):
-        with settings(user = newuser, password = newpasswd):
+        with settings(user=newuser, password=newpasswd):
             run('rm -rf slaves')
             run('touch slaves')
             for k in env.roledefs['spark_slaves']:
@@ -420,18 +427,17 @@ def configSpark():
     setProperty(configDir + '/spark-env.sh', 'SPARK_LOCAL_DIRS=', '/home/%s/spark' % newuser)
 
     # spark-defaults.conf
-    setProperty(configDir + '/spark-defaults.conf', 'spark.master', ' spark://' + env.roledefs['spark_master'][0] + ':7077')
+    setProperty(configDir + '/spark-defaults.conf', 'spark.master',
+                ' spark://' + env.roledefs['spark_master'][0] + ':7077')
     setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.enabled', ' true')
     setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.dir', ' hdfs:///spark-event-log')
-
-
 
 
 @roles('hadoop_master')
 def startHadoop():
     reformat = prompt('would you like to reformat the namenode? (Y / N): ', default='N')
     if reformat == 'Y':
-        with settings(user = newuser, password = newpasswd):
+        with settings(user=newuser, password=newpasswd):
             run('hdfs namenode -format')
     elif reformat == 'N':
         print green('No namenode format.')
@@ -442,20 +448,20 @@ def startHadoop():
         st = prompt('1. start dfs; \n2. start yarn; \n3. start all; \n Choose one in (1, 2, 3): ', default='1')
 
         if st == '1':
-            with settings(user = newuser, password = newpasswd):
+            with settings(user=newuser, password=newpasswd):
                 run('/usr/local/hadoop/sbin/start-dfs.sh')
         elif st == '2':
-            with settings(user = newuser, password = newpasswd):
+            with settings(user=newuser, password=newpasswd):
                 run('/usr/local/hadoop/sbin/start-yarn.sh')
         elif st == '3':
-            with settings(user = newuser, password = newpasswd):
+            with settings(user=newuser, password=newpasswd):
                 run('/usr/local/hadoop/sbin/start-all.sh')
         run('sleep 3')
 
 
 @roles('hadoop_master')
 def stopHadoop():
-    with hide('stdout'), settings(user = newuser, password = newpasswd, warn_only = True):
+    with hide('stdout'), settings(user=newuser, password=newpasswd, warn_only=True):
         run('/usr/local/hadoop/sbin/stop-all.sh')
         rs = run('jps | grep -P \'NameNode|DataNode\'')
         if rs != '':
@@ -465,63 +471,71 @@ def stopHadoop():
 
 @roles('hadoop_master')
 def checkHadoop():
-    with hide('stdout'), settings(user = newuser, password = newpasswd, warn_only = True):
+    with hide('stdout'), settings(user=newuser, password=newpasswd, warn_only=True):
         rs = run('jps | grep -P \'NameNode|DataNode\'')
         if rs != '':
             return True
         else:
             return False
 
+
 @roles('cluster')
 def cleanHadoop():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('rm -rf /home/%s/dfs' % newuser)
 
 
 @roles('zookeeper')
 def startZookeeper():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('zkServer.sh start')
+
 
 @roles('zookeeper')
 def stopZookeeper():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('zkServer.sh stop')
+
 
 @roles('zookeeper')
 def cleanZookeeper():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('rm -rf /home/%s/zookeeper/version-2' % newuser)
+
 
 @roles('hbase_master')
 def startHBase():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('start-hbase.sh; sleep 3')
+
 
 @roles('hbase_master')
 def stopHBase():
-    with settings(user = newuser, password = newpasswd, warn_only = True):
+    with settings(user=newuser, password=newpasswd, warn_only=True):
         run('stop-hbase.sh')
+
 
 @roles('kafka')
 def startKafka():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('kafka-server-start.sh -daemon /usr/local/kafka/config/server.properties; sleep 1')
 
 
 @roles('kafka')
 def stopKafka():
-    with settings(user = newuser, password = newpasswd, warn_only = True):
+    with settings(user=newuser, password=newpasswd, warn_only=True):
         run('ps ax | grep -i \'kafka\.Kafka\' | grep java | grep -v grep | awk \'{print $1}\' | xargs kill -9')
+
 
 @roles('spark_master')
 def startSpark():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('/usr/local/spark/sbin/start-all.sh; sleep 3')
+
 
 @roles('spark_master')
 def stopSpark():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('/usr/local/spark/sbin/stop-all.sh')
 
 
@@ -580,6 +594,7 @@ def configuration(op=None):
         execute(configSpark)
     pass
 
+
 @task
 def starts(op=None):
     if op == None:
@@ -600,12 +615,14 @@ def starts(op=None):
     else:
         pass
 
+
 @task
 def installs(op=None):
     execute(preset)
     basedeploy()
     deploy(op)
     starts(op)
+
 
 @task
 def configs(op=None):
@@ -646,8 +663,9 @@ def cleans(op=None):
     else:
         pass
 
+
 @task
 @roles('cluster')
 def status():
-    with settings(user = newuser, password = newpasswd):
+    with settings(user=newuser, password=newpasswd):
         run('jps')
