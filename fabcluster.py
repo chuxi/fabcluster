@@ -547,7 +547,7 @@ def preset():
     addUser()
     setSSHs()
     disableFirewall()
-    setNTP()
+    # setNTP()
     mkDirs()
 
 
@@ -669,3 +669,10 @@ def cleans(op=None):
 def status():
     with settings(user=newuser, password=newpasswd):
         run('jps')
+
+# @task
+# @roles('cluster')
+# def kills(op=None):
+#     with settings(user=newuser, password=newpasswd, warn_only=True):
+#         if op == 'hadoop':
+#             run('ps ax | grep -i \'kafka\.Kafka\' | grep java | grep -v grep | awk \'{print $1}\' | xargs kill -9')
