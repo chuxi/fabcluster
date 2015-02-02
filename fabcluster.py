@@ -33,9 +33,9 @@ env.roledefs = {
     'hadoop_master': clusters[:1],
     'hadoop_smaster': clusters[1:2],
     'hadoop_slaves': clusters,
-    'zookeeper': clusters[:3],
+    'zookeeper': clusters[1:],
     'hbase': clusters,
-    'hbase_master': clusters[:1],
+    'hbase_master': clusters[1:2],
     'hbase_slaves': clusters,
     'kafka': clusters[2:],
     'spark': clusters,
@@ -163,7 +163,10 @@ def setNTP():
     myver = result.split(' ')[1]
     with settings(warn_only=True):
         if myos == 'centos':
-            sudo('yum -y install ntp')
+            with settings(warn_only=True):
+                result = run("systemctl list-units | grep 'ntpd' | awk '{{print $4}}'")
+                if (result != 'running'):
+                    sudo('yum -y install ntp')
             if myver.startswith('7'):
                 sudo('systemctl start ntpd.service')
                 sudo('systemctl enable ntpd.service')
@@ -186,6 +189,7 @@ def mkDirs():
         添加需要预先设置的目录
     '''
     with settings(warn_only=True):
+        sudo('rm -rf %s' % optDir)
         sudo('[ ! -d %s ] && mkdir -p %s && chown -R %s:%s %s' % (optDir, optDir, newuser, newgroup, optDir))
 
 
@@ -547,12 +551,12 @@ def preset():
     addUser()
     setSSHs()
     disableFirewall()
-    # setNTP()
+    setNTP()
     mkDirs()
 
 
 def basedeploy():
-    execute(preset)
+    # execute(preset)
     execute(installJDK)
 
 
@@ -618,7 +622,6 @@ def starts(op=None):
 
 @task
 def installs(op=None):
-    execute(preset)
     basedeploy()
     deploy(op)
     starts(op)
