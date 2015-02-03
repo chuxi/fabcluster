@@ -36,7 +36,7 @@ env.roledefs = {
     'zookeeper': clusters[1:],
     'hbase': clusters,
     'hbase_master': clusters[1:2],
-    'hbase_slaves': clusters,
+    'hbase_slaves': clusters[:1] + clusters[2:],
     'kafka': clusters[2:],
     'spark': clusters,
     'spark_master': clusters[2:3],
@@ -374,6 +374,8 @@ def configHBase():
     setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.zookeeper.quorum',
                   '%s' % (','.join(x for x in env.roledefs['zookeeper'])))
     setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.zookeeper.property.dataDir', '/home/%s/zookeeper' % newuser)
+    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.regionserver.port', '16020')
+    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.regionserver.info.port', '16030')
 
     # regionservers
     with cd(configDir):
@@ -609,8 +611,9 @@ def starts(op=None):
         execute(startSpark)
     elif op == 'hadoop':
         execute(startHadoop)
-    elif op == 'hbase':
+    elif op == 'zookeeper':
         execute(startZookeeper)
+    elif op == 'hbase':
         execute(startHBase)
     elif op == 'kafka':
         execute(startKafka)
