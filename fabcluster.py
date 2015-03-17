@@ -14,13 +14,16 @@ from fabric.context_managers import *
 from fabric.contrib.console import confirm
 
 env.user = 'vlis'
-env.password = 'zjuvlis'
+env.password = 'vlis@zju'
 # env.hostnames = {'10.214.208.11': 'node1',
 # '10.214.208.12': 'node2',
 #                  '10.214.208.13': 'node3',
 #                  '10.214.208.14': 'node4',
 #                  }
-clusters = ['10.214.208.11', '10.214.208.12', '10.214.208.13', '10.214.208.14']
+# clusters = ['10.214.208.11', '10.214.208.12', '10.214.208.13', '10.214.208.14']
+
+# single node
+clusters = ['10.214.20.118']
 
 env.hostnames = dict([h, 'node%d' % (i + 1)] for i, h in enumerate(clusters))
 
@@ -28,18 +31,34 @@ env.keywords = ['jdk', 'hadoop', 'zookeeper', 'hbase', 'kafka', 'spark']
 # 获取需要安装的tar包名称
 env.fnames = dict(zip(sorted(env.keywords), sorted(os.listdir('./tars'))))
 
+# env.roledefs = {
+#     'cluster': clusters,
+#     'hadoop_master': clusters[:1],
+#     'hadoop_smaster': clusters[1:2],
+#     'hadoop_slaves': clusters,
+#     'zookeeper': clusters[1:],
+#     'hbase': clusters,
+#     'hbase_master': clusters[1:2],
+#     'hbase_slaves': clusters[:1] + clusters[2:],
+#     'kafka': clusters[2:],
+#     'spark': clusters,
+#     'spark_master': clusters[2:3],
+#     'spark_slaves': clusters
+# }
+
+# single node
 env.roledefs = {
     'cluster': clusters,
-    'hadoop_master': clusters[:1],
-    'hadoop_smaster': clusters[1:2],
+    'hadoop_master': clusters[0],
+    'hadoop_smaster': clusters[0],
     'hadoop_slaves': clusters,
-    'zookeeper': clusters[1:],
+    'zookeeper': clusters,
     'hbase': clusters,
-    'hbase_master': clusters[1:2],
-    'hbase_slaves': clusters[:1] + clusters[2:],
-    'kafka': clusters[2:],
+    'hbase_master': clusters[0],
+    'hbase_slaves': clusters,
+    'kafka': clusters,
     'spark': clusters,
-    'spark_master': clusters[2:3],
+    'spark_master': clusters[0],
     'spark_slaves': clusters
 }
 
@@ -245,6 +264,7 @@ def configProfile(envname, key):
     sudo('sed -i \'s/.*%s.*//g\' /etc/profile' % envname)
     sudo('sed -i \'$a export %s=/usr/local/%s\' /etc/profile' % (envname, key))
     sudo('sed -i \'$a export PATH=$%s/bin:$PATH\' /etc/profile' % envname)
+    sudo('source /etc/profile')
 
 
 def setXMLPropVal(fname, prop, value):
@@ -434,7 +454,7 @@ def configSpark():
 
     # spark-defaults.conf
     setProperty(configDir + '/spark-defaults.conf', 'spark.master',
-                ' spark://' + env.roledefs['spark_master'][0] + ':7077')
+                ' spark://' + env.roledefs['spark_master'] + ':7077')
     setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.enabled', ' true')
     setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.dir', ' hdfs:///spark-event-log')
 
@@ -557,8 +577,9 @@ def preset():
     mkDirs()
 
 
+@task
 def basedeploy():
-    # execute(preset)
+    execute(preset)
     execute(installJDK)
 
 
@@ -571,9 +592,9 @@ def deploy(op=None):
         execute(installSpark)
     elif op == 'hadoop':
         execute(installHadoop)
-    elif op == 'hbase':
-        execute(installHadoop)
+    elif op == 'zookeeper':
         execute(installZookeeper)
+    elif op == 'hbase':
         execute(installHBase)
     elif op == 'kafka':
         execute(installKafka)
@@ -625,9 +646,8 @@ def starts(op=None):
 
 @task
 def installs(op=None):
-    basedeploy()
     deploy(op)
-    starts(op)
+    # starts(op)
 
 
 @task
