@@ -23,44 +23,50 @@ env.password = 'vlis@zju'
 # clusters = ['10.214.208.11', '10.214.208.12', '10.214.208.13', '10.214.208.14']
 
 # single node
-clusters = ['10.214.20.118']
+# clusters = ['10.214.20.118']
+
+clusters = ['10.214.20.116', '10.214.20.118']
 
 env.hostnames = dict([h, 'node%d' % (i + 1)] for i, h in enumerate(clusters))
 
-env.keywords = ['jdk', 'hadoop', 'zookeeper', 'hbase', 'kafka', 'spark']
+
+env.files = os.listdir('./tars')
+env.keywords = [filter(str.isalpha, i.split('.')[0]) for i in env.files]
+
 # 获取需要安装的tar包名称
-env.fnames = dict(zip(sorted(env.keywords), sorted(os.listdir('./tars'))))
+env.fnames = dict(zip(sorted(env.keywords), sorted(env.files)))
 
-# env.roledefs = {
-#     'cluster': clusters,
-#     'hadoop_master': clusters[:1],
-#     'hadoop_smaster': clusters[1:2],
-#     'hadoop_slaves': clusters,
-#     'zookeeper': clusters[1:],
-#     'hbase': clusters,
-#     'hbase_master': clusters[1:2],
-#     'hbase_slaves': clusters[:1] + clusters[2:],
-#     'kafka': clusters[2:],
-#     'spark': clusters,
-#     'spark_master': clusters[2:3],
-#     'spark_slaves': clusters
-# }
 
-# single node
 env.roledefs = {
-    'cluster': clusters,
-    'hadoop_master': clusters[0],
-    'hadoop_smaster': clusters[0],
+    'clusters': clusters,
+    'hadoop_master': clusters[:1],
+    'hadoop_smaster': clusters[1:2],
     'hadoop_slaves': clusters,
     'zookeeper': clusters,
     'hbase': clusters,
-    'hbase_master': clusters[0],
+    'hbase_master': clusters[0:1],
     'hbase_slaves': clusters,
     'kafka': clusters,
     'spark': clusters,
-    'spark_master': clusters[0],
+    'spark_master': clusters[:1],
     'spark_slaves': clusters
 }
+
+# single node
+# env.roledefs = {
+#     'cluster': clusters,
+#     'hadoop_master': clusters[0],
+#     'hadoop_smaster': clusters[0],
+#     'hadoop_slaves': clusters,
+#     'zookeeper': clusters,
+#     'hbase': clusters,
+#     'hbase_master': clusters[0],
+#     'hbase_slaves': clusters,
+#     'kafka': clusters,
+#     'spark': clusters,
+#     'spark_master': clusters[0],
+#     'spark_slaves': clusters
+# }
 
 baseDir = '/home/hadoop'
 optDir = '/opt/vlis'
@@ -90,7 +96,7 @@ def prelocal():
     local('mkdir -p /tmp/ssh')
     with lcd('/tmp/ssh'):
         local('rm -rf *')
-        local('ssh-keygen -t rsa -N "" -f id_rsa')
+        local("ssh-keygen -t rsa -N '' -f id_rsa")
         local('cat id_rsa.pub > authorized_keys')
         local('echo "StrictHostKeyChecking no" > config')
 
@@ -170,7 +176,7 @@ def addUser():
     sudo('useradd -g %s -m -r %s' % (newgroup, newuser))
     sudo('echo %s:%s | chpasswd' % (newuser, newpasswd))
     sudo('sed -i \'s/.*%s.*//g\' /etc/sudoers' % newuser)
-    sudo('sed -i \'$a hadoop  ALL=(ALL)       ALL\' /etc/sudoers')
+    sudo('sed -i \'$i hadoop  ALL=(ALL)       ALL\' /etc/sudoers')
     print green('add user hadoop %s successfully!' % env.host_string)
 
 
@@ -254,40 +260,53 @@ def processTar(key, fname):
     untarfile(key, fname)
 
 
-@roles('cluster')
+@roles('clusters')
 def installJDK():
     processTar('jdk', env.fnames['jdk'])
     configProfile('JAVA_HOME', 'jdk')
 
 
 def configProfile(envname, key):
-    sudo('sed -i \'s/.*%s.*//g\' /etc/profile' % envname)
-    sudo('sed -i \'$a export %s=/usr/local/%s\' /etc/profile' % (envname, key))
-    sudo('sed -i \'$a export PATH=$%s/bin:$PATH\' /etc/profile' % envname)
-    sudo('source /etc/profile')
+    with settings(warn_only=True):
+        result = run("nl /etc/profile | grep '%s' | awk '{print $1}'" % ('export ' + envname))
+    if result == '':
+        sudo("sed -i '$i export %s=/usr/local/%s' /etc/profile" % (envname, key))
+        sudo("sed -i '$i export PATH=$%s/bin:$PATH' /etc/profile" % envname)
+        sudo("source /etc/profile")
+    else:
+        num = int(result)
+        # sudo("sed -i '%dc export %s=/usr/local/%s' /etc/profile" % (num, envname, key))
+        print yellow("the env value is already exist!")
+
+
 
 
 def setXMLPropVal(fname, prop, value):
-    prop = '<name>' + prop + '</name>'
-    value = '<value>%s</value>' % value
+    prop = '    <name>%s</name>' % prop
+    value = '    <value>%s</value>' % value
     with settings(warn_only=True):
-        result = run('nl %s | grep \'%s\'' % (fname, prop))
+        result = run("nl %s | grep '%s' | awk '{print $1}'" % (fname, prop))
     if result == '':
-        sudo('sed -i \'$i <property>\' %s' % fname)
-        sudo('sed -i \'$i %s\' %s' % (prop, fname))
-        sudo('sed -i \'$i %s\' %s' % (value, fname))
-        sudo('sed -i \'$i </property>\' %s' % fname)
+        sudo("sed -i '$i <property>' %s" % fname)
+        sudo("sed -i '$i %s' %s" % (prop, fname))
+        sudo("sed -i '$i %s' %s" % (value, fname))
+        sudo("sed -i '$i </property>' %s" % fname)
     else:
-        num = int(run('grep -n \'%s\' %s' % (prop, fname)).split(':')[0]) + 1
-        sudo('sed -i \'%dc %s\' %s' % (num, value, fname))
+        num = int(result) + 1
+        sudo("sed -i '%dc %s' %s" % (num, value, fname))
 
 
 def setProperty(fname, prop, value):
-    sudo('sed -i \'s/.*%s.*//g\' %s' % (prop, fname))
-    sudo('sed -i \'$a %s\' %s' % (prop + value, fname))
+    with settings(warn_only=True):
+        result = run("nl %s | grep '%s' | awk '{print $1}'" % (fname, prop))
+    if result == '':
+        sudo("sed -i '$i %s' %s" % (prop + value, fname))
+    else:
+        num = int(result)
+        sudo("sed -i '%dc %s' %s" % (num, prop + value, fname))
 
 
-@roles('cluster')
+@roles('clusters')
 def installHadoop():
     key = 'hadoop'
     processTar(key, env.fnames[key])
@@ -295,7 +314,7 @@ def installHadoop():
     configHadoop()
 
 
-@roles('cluster')
+@roles('clusters')
 def configHadoop():
     configDir = '/usr/local/hadoop/etc/hadoop'
 
@@ -305,7 +324,7 @@ def configHadoop():
     yarnsite = configDir + '/yarn-site.xml'
 
     # hadoop-env.sh
-    setProperty(configDir + '/hadoop-env.sh', 'export JAVA_HOME=', r'\/usr\/local\/jdk')
+    setProperty(configDir + '/hadoop-env.sh', 'export JAVA_HOME=', '/usr/local/jdk')
 
     # core-site.xml
     setXMLPropVal(coresite, 'fs.defaultFS', 'hdfs://%s:9000' % env.roledefs['hadoop_master'][0])
@@ -448,15 +467,15 @@ def configSpark():
             run('cp spark-defaults.conf.template spark-defaults.conf')
 
     # spark-env.sh
-    setProperty(configDir + '/spark-env.sh', 'JAVA_HOME=', '\/usr\/local\/jdk')
-    setProperty(configDir + '/spark-env.sh', 'HADOOP_CONF_DIR=', '\/usr\/local\/hadoop\/etc\/hadoop')
+    setProperty(configDir + '/spark-env.sh', 'JAVA_HOME=', '/usr/local/jdk')
+    setProperty(configDir + '/spark-env.sh', 'HADOOP_CONF_DIR=', '/usr/local/hadoop/etc/hadoop')
     setProperty(configDir + '/spark-env.sh', 'SPARK_LOCAL_DIRS=', '/home/%s/spark' % newuser)
 
     # spark-defaults.conf
     setProperty(configDir + '/spark-defaults.conf', 'spark.master',
-                ' spark://' + env.roledefs['spark_master'] + ':7077')
+                ' spark://' + env.roledefs['spark_master'][0] + ':7077')
     setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.enabled', ' true')
-    setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.dir', ' hdfs:///spark-event-log')
+    # setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.dir', ' hdfs:///spark-event-log')
 
 
 @roles('hadoop_master')
@@ -505,7 +524,7 @@ def checkHadoop():
             return False
 
 
-@roles('cluster')
+@roles('clusters')
 def cleanHadoop():
     with settings(user=newuser, password=newpasswd):
         run('rm -rf /home/%s/dfs' % newuser)
@@ -565,7 +584,7 @@ def stopSpark():
         run('/usr/local/spark/sbin/stop-all.sh')
 
 
-@roles('cluster')
+@roles('clusters')
 def preset():
     prelocal()
     setHosts()
@@ -691,7 +710,7 @@ def cleans(op=None):
 
 
 @task
-@roles('cluster')
+@roles('clusters')
 def status():
     with settings(user=newuser, password=newpasswd):
         run('jps')
