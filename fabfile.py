@@ -14,18 +14,18 @@ from fabric.context_managers import *
 from fabric.contrib.console import confirm
 
 env.user = 'vlis'
-env.password = 'vlis@zju'
+env.password = 'zjuvlis'
 # env.hostnames = {'10.214.208.11': 'node1',
 # '10.214.208.12': 'node2',
 #                  '10.214.208.13': 'node3',
 #                  '10.214.208.14': 'node4',
 #                  }
-# clusters = ['10.214.208.11', '10.214.208.12', '10.214.208.13', '10.214.208.14']
+clusters = ['10.214.208.11', '10.214.208.12', '10.214.208.13', '10.214.208.14']
 
 # single node
 # clusters = ['10.214.20.118']
 
-clusters = ['10.214.20.116', '10.214.20.118']
+# clusters = ['10.214.20.116']
 
 env.hostnames = dict([h, 'node%d' % (i + 1)] for i, h in enumerate(clusters))
 
@@ -45,7 +45,7 @@ env.roledefs = {
     'zookeeper': clusters,
     'hbase': clusters,
     'hbase_master': clusters[0:1],
-    'hbase_slaves': clusters,
+    'hbase_slaves': clusters[1:],
     'kafka': clusters,
     'spark': clusters,
     'spark_master': clusters[:1],
@@ -274,9 +274,9 @@ def configProfile(envname, key):
         sudo("sed -i '$i export PATH=$%s/bin:$PATH' /etc/profile" % envname)
         sudo("source /etc/profile")
     else:
-        num = int(result)
+        # num = int(result)
         # sudo("sed -i '%dc export %s=/usr/local/%s' /etc/profile" % (num, envname, key))
-        print yellow("the env value is already exist!")
+        print yellow("the env value %s is already exist!" % envname)
 
 
 
@@ -403,7 +403,7 @@ def configHBase():
     configDir = '/usr/local/hbase/conf'
 
     # hbase-env.sh
-    setProperty(configDir + '/hbase-env.sh', 'export JAVA_HOME=', r'\/usr\/local\/jdk')
+    setProperty(configDir + '/hbase-env.sh', 'export JAVA_HOME=', '/usr/local/jdk')
     setProperty(configDir + '/hbase-env.sh', 'export HBASE_MANAGES_ZK=', 'false')
 
     # hbase-site.xml
@@ -413,8 +413,8 @@ def configHBase():
     setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.zookeeper.quorum',
                   '%s' % (','.join(x for x in env.roledefs['zookeeper'])))
     setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.zookeeper.property.dataDir', '/home/%s/zookeeper' % newuser)
-    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.regionserver.port', '16020')
-    setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.regionserver.info.port', '16030')
+    # setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.regionserver.port', '16200')
+    # setXMLPropVal(configDir + '/hbase-site.xml', 'hbase.regionserver.info.port', '16300')
 
     # regionservers
     with cd(configDir):
@@ -474,7 +474,7 @@ def configSpark():
     # spark-defaults.conf
     setProperty(configDir + '/spark-defaults.conf', 'spark.master',
                 ' spark://' + env.roledefs['spark_master'][0] + ':7077')
-    setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.enabled', ' true')
+    # setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.enabled', ' true')
     # setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.dir', ' hdfs:///spark-event-log')
 
 
@@ -721,3 +721,12 @@ def status():
 #     with settings(user=newuser, password=newpasswd, warn_only=True):
 #         if op == 'hadoop':
 #             run('ps ax | grep -i \'kafka\.Kafka\' | grep java | grep -v grep | awk \'{print $1}\' | xargs kill -9')
+
+@task
+@roles('clusters')
+def runcmd(op = None):
+    with settings(user=newuser, password=newpasswd):
+        if (op is not None):
+            sudo(op)
+        else:
+            pass
