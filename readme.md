@@ -24,26 +24,25 @@ Preparation:
 
 3. the env.keywords coordinates the files in tars, finally the structure should like following pic. You can remove or add your own keywords and implements the installation by yourself. It is not difficult because I have hoed out most bash shell problems in my code.
 
-        env.keywords = ['jdk', 'hadoop', 'zookeeper', 'hbase', 'kafka', 'spark']
-        # get all the tars name under the directory './tars'
-        env.fnames = dict(zip(sorted(env.keywords), sorted(os.listdir('./tars'))))
+        env.files = os.listdir('./tars')
+        env.keywords = [filter(str.isalpha, i.split('.')[0]) for i in env.files]
 
     ![files in tars](view.png)
 
 4. One of the most important thing is to set up your sub-clusters of each role in env.roledefs. You can change some settings here.
 
         env.roledefs = {
-            'cluster': clusters,
+            'clusters': clusters,
             'hadoop_master': clusters[:1],
             'hadoop_smaster': clusters[1:2],
             'hadoop_slaves': clusters,
-            'zookeeper': clusters[1:],
+            'zookeeper': clusters,
             'hbase': clusters,
-            'hbase_master': clusters[1:2],
-            'hbase_slaves': clusters,
-            'kafka': clusters[2:],
+            'hbase_master': clusters[0:1],
+            'hbase_slaves': clusters[1:],
+            'kafka': clusters,
             'spark': clusters,
-            'spark_master': clusters[2:3],
+            'spark_master': clusters[:1],
             'spark_slaves': clusters
         }
 
@@ -58,30 +57,33 @@ Preparation:
 
 Then I record some words about the usage of my program. It is very easy if you understand the fabric principles.
 
-        fab -f fabcluster.py installs
+        fab installs
 
 The command upside will run the whole installation. It starts from basic settings, including hosts, new user, ssh no passwords, disable Firewall, set NTP. Then completes JDK installation, Hadoop, Zookeeper, HBase, Kafka, Spark.  
 
-        fab -f fabcluster.py installs:hbase
+        fab installs:hbase
 
 It will install HBase, including all basic installations, and Hadoop, Zookeeper. Because HBase is running on HDFS and Zookeeper.
 
-        fab -f fabcluster.py installs:kafka
-        fab -f fabcluster.py installs:spark
+        fab installs:kafka
+        fab installs:spark
 
 This two just install singular kafka and spark.
 
 
 And I set up some interfaces about starts, stops and cleans work.
 
-        fab -f fabcluster.py starts
-        fab -f fabcluster.py starts:hadoop
-        fab -f fabcluster.py starts:hbase
+        fab starts
+        fab starts:hadoop
+        fab starts:hbase
         
-        fab -f fabcluster.py stops
+        fab stops
         
-        fab -f fabcluster.py cleans
+        fab cleans
 
-In fact, I think you will write your own deploy program. May my program helps.
+In fact, I think you will write your own deploy program. May my program help.
+
+Now you must run commands separately, like installs:hadoop, installs:zookeeper, installs:hbase, installs:kafka, installs:spark. And start all parts one by one: starts:hadoop  (Be careful reformat and clean function), starts:zookeeper, starts:hbase, starts:kafka, starts:spark
+
 
 Thank you.
