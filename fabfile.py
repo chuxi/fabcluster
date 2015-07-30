@@ -46,7 +46,7 @@ env.roledefs = {
     'hbase': clusters,
     'hbase_master': clusters[0:1],
     'hbase_slaves': clusters[1:],
-    'kafka': clusters,
+    'kafka': clusters[1:],
     'spark': clusters,
     'spark_master': clusters[:1],
     'spark_slaves': clusters
@@ -268,7 +268,7 @@ def installJDK():
 
 def configProfile(envname, key):
     with settings(warn_only=True):
-        result = run("nl /etc/profile | grep '%s' | awk '{print $1}'" % ('export ' + envname))
+        result = run("nl -b a /etc/profile | grep '%s' | awk '{print $1}'" % ('export ' + envname))
     if result == '':
         sudo("sed -i '$i export %s=/usr/local/%s' /etc/profile" % (envname, key))
         sudo("sed -i '$i export PATH=$%s/bin:$PATH' /etc/profile" % envname)
@@ -285,7 +285,7 @@ def setXMLPropVal(fname, prop, value):
     prop = '    <name>%s</name>' % prop
     value = '    <value>%s</value>' % value
     with settings(warn_only=True):
-        result = run("nl %s | grep '%s' | awk '{print $1}'" % (fname, prop))
+        result = run("nl -b a %s | grep '%s' | awk '{print $1}'" % (fname, prop))
     if result == '':
         sudo("sed -i '$i <property>' %s" % fname)
         sudo("sed -i '$i %s' %s" % (prop, fname))
@@ -298,7 +298,7 @@ def setXMLPropVal(fname, prop, value):
 
 def setProperty(fname, prop, value):
     with settings(warn_only=True):
-        result = run("nl %s | grep '%s' | awk '{print $1}'" % (fname, prop))
+        result = run("nl -b a %s | grep '%s' | awk '{print $1}'" % (fname, prop))
     if result == '':
         sudo("sed -i '$i %s' %s" % (prop + value, fname))
     else:
@@ -727,6 +727,22 @@ def status():
 def runcmd(op = None):
     with settings(user=newuser, password=newpasswd):
         if (op is not None):
-            sudo(op)
+            if (op == 'reboot'):
+                reboot
+            else:
+                sudo(op)
         else:
             pass
+
+@task
+@roles("spark_master")
+def stopsparkapp():
+    with settings(user=newuser, password=newpasswd, warn_only=True):
+        run("jps | grep -P 'SparkSubmit' | awk '{print $1}' | xargs kill -9")
+
+
+# bug
+@task
+@roles('clusters')
+def rebootsystem():
+    reboot()
