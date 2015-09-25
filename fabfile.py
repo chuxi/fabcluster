@@ -41,7 +41,7 @@ env.roledefs = {
     'clusters': clusters,
     'hadoop_master': clusters[:1],
     'hadoop_smaster': clusters[1:2],
-    'hadoop_slaves': clusters,
+    'hadoop_slaves': clusters[1:],
     'zookeeper': clusters,
     'hbase': clusters,
     'hbase_master': clusters[0:1],
@@ -282,8 +282,8 @@ def configProfile(envname, key):
 
 
 def setXMLPropVal(fname, prop, value):
-    prop = '    <name>%s</name>' % prop
-    value = '    <value>%s</value>' % value
+    prop = '<name>%s</name>' % prop
+    value = '<value>%s</value>' % value
     with settings(warn_only=True):
         result = run("nl -b a %s | grep '%s' | awk '{print $1}'" % (fname, prop))
     if result == '':
@@ -329,13 +329,26 @@ def configHadoop():
     # core-site.xml
     setXMLPropVal(coresite, 'fs.defaultFS', 'hdfs://%s:9000' % env.roledefs['hadoop_master'][0])
     setXMLPropVal(coresite, 'io.file.buffer.size', '131072')
+    # to avoid warning WARN org.apache.hadoop.security.UserGroupInformation: No groups available for user king
+    setXMLPropVal(coresite, 'hadoop.user.group.static.mapping.overrides', 'king=hadoop')
 
     # hdfs-site.xml
     setXMLPropVal(hdfssite, 'dfs.namenode.name.dir', 'file:/home/%s/dfs/name' % newuser)
     setXMLPropVal(hdfssite, 'dfs.datanode.data.dir', 'file:/home/%s/dfs/data' % newuser)
     setXMLPropVal(hdfssite, 'dfs.namenode.secondary.http-address', '%s:50090' % env.roledefs['hadoop_smaster'][0])
     setXMLPropVal(hdfssite, 'dfs.replication', '3')
+    setXMLPropVal(hdfssite, 'dfs.blocksize', '1m')
     setXMLPropVal(hdfssite, 'dfs.permissions.enabled', 'false')
+
+    # todo: check /etc/security/limits.conf 1048576........must reboot, so remove this
+    # limitsfile = '/etc/security/limits.conf'
+    # with settings(warn_only = True):
+    #     result = run("nl -b a %s | grep '%s' | awk '{print $1}'" % (limitsfile, '1048576'))
+    # if result == '':
+    #     sudo("sed -i '$a *               soft    memlock         1048576' %s" % limitsfile)
+
+    setXMLPropVal(hdfssite, 'dfs.datanode.max.locked.memory', '1073741824')
+
 
     # yarn-site.xml
     setXMLPropVal(yarnsite, 'yarn.resourcemanager.hostname', env.roledefs['hadoop_master'][0])
@@ -473,9 +486,9 @@ def configSpark():
 
     # spark-defaults.conf
     setProperty(configDir + '/spark-defaults.conf', 'spark.master',
-                ' spark://' + env.roledefs['spark_master'][0] + ':7077')
-    # setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.enabled', ' true')
-    # setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.dir', ' hdfs:///spark-event-log')
+                ' spark://' + env.hostnames[env.roledefs['spark_master'][0]] + ':7077')
+    setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.enabled', ' true')
+    setProperty(configDir + '/spark-defaults.conf', 'spark.eventLog.dir', ' /tmp')
 
 
 @roles('hadoop_master')
@@ -504,10 +517,11 @@ def startHadoop():
         run('sleep 3')
 
 
-@roles('hadoop_master')
+@roles('clusters')
 def stopHadoop():
     with hide('stdout'), settings(user=newuser, password=newpasswd, warn_only=True):
-        run('/usr/local/hadoop/sbin/stop-all.sh')
+        # run('/usr/local/hadoop/sbin/stop-dfs.sh; sleep 3')
+        run("jps | grep -P 'NameNode|DataNode' | awk '{print $1}' | xargs kill -9")
         rs = run('jps | grep -P \'NameNode|DataNode\'')
         if rs != '':
             abort('can not stop hadoop')
